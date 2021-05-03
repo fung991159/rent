@@ -39,15 +39,27 @@ class HseSpider(scrapy.Spider):
     def parse_property_info(self, response):
         """parse
         """
-        # least
-        # //td[contains(text(), 'Monthly Rental')]/following-sibling::td/div/text()
+
+        from scrapy import Selector        
         sel = Selector(text=response.text)
 
         # title
-        # "//div[@class='header']/text()"
-        # ', '.join([i.strip() for i in a])
-        
-        rent_amt_xpath = "//td[contains(text(), 'Monthly Rental')]/following-sibling::td/div/text()"
-        rent_amt = int(sel.xpath(rent_amt_xpath).re(r"Lease \$(.*)")[0].replace(',', ''))
+        title_xpath = "//h3/following-sibling::div//div[@class='header']/text()"
+        titles = sel.xpath(title_xpath).getall()
+        title = ', '.join([i.strip() for i in titles])
 
+        # desc
+        # "//div[@id='desc_normal']"
+        
+        #tags
+        # "//div[@id='desc_normal']/following-sibling::div/*"
+        
+        # table: maybe it is better to scrap the entire table and pick from there
+        #//tr/td/div/text()
+        # monthly rental
+        rent_amt_xpath = "//td[contains(text(), 'Monthly Rental')]/following-sibling::td/div/text()"
+        rent_amt = sel.xpath(rent_amt_xpath).re(r"Lease \$(.*)")[0]
+        rent_amt = int(rent_amt.replace(',', ''))
+
+        # building area
         inspect_response(response, self)
