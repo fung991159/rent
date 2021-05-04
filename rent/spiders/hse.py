@@ -49,17 +49,38 @@ class HseSpider(scrapy.Spider):
         title = ', '.join([i.strip() for i in titles])
 
         # desc
-        # "//div[@id='desc_normal']"
-        
+        desc_xpath = "//div[@id='desc_normal']/p/text()"
+        descs = sel.xpath(desc_xpath).getall()
+        desc = ', '.join([i.strip() for i in descs])
+
         #tags
         # "//div[@id='desc_normal']/following-sibling::div/*"
-        
-        # table: maybe it is better to scrap the entire table and pick from there
-        #//tr/td/div/text()
+        # tags_xpath = "//div[@id='desc_normal']/following-sibling::div/*"
+        tags_xpath = "//div[contains(@class,'labels')]//text()"
+        tags = sel.xpath(tags_xpath).getall()
+        tag = ', '.join([i.strip() for i in tags if i != '\n'])
+
+        # table content
+        # instead of fetching each row one by one, run a for loop
+        # to fetch everything into a dict
+        tr_xpath = "//table//tr[{}]/td[{}]//text()"
+        i=1
+        tbl = {}
+        while sel.xpath(tr_xpath.format(i, 1)):
+            row_desc  = sel.xpath(tr_xpath.format(i, 1)).getall()
+            row_desc = ', '.join([i.strip() for i in row_desc if i != '\n'])
+            row_val = sel.xpath(tr_xpath.format(i, 2)).getall()
+            row_val = ', '.join([i.strip() for i in row_val if i != '\n'])
+            # print(row_desc, row_val, sep='\n')
+            tbl[row_desc] = row_val
+            i+=1
+
+
         # monthly rental
         rent_amt_xpath = "//td[contains(text(), 'Monthly Rental')]/following-sibling::td/div/text()"
         rent_amt = sel.xpath(rent_amt_xpath).re(r"Lease \$(.*)")[0]
         rent_amt = int(rent_amt.replace(',', ''))
+
 
         # building area
         inspect_response(response, self)
