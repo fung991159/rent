@@ -7,23 +7,29 @@ from scrapy.shell import inspect_response
 from scrapy import Selector
 
 
-def xpath_parser(x_path):
+def xpath_parser(x_path, getall=False):
     """parse all items extracted by x_path, with comma as seperator
     ignore newline character within a item as well as standalone newline item
 
     Args:
         html_response ([type]): [description]
         x_path ([type]): [description]
+        getall(str): scrapy getall() instead of the default get()
 
     Returns:
         [type]: [description]
-    """    
+    """
     if not xpath_parser.response:
         raise ValueError('response not attached to function')
 
     sel = Selector(text=xpath_parser.response.text)
-    elements = sel.xpath(x_path).getall()
-    output = ', '.join([e.strip() for e in elements if e != '\n'])
+    getter = 'getall' if getall else 'get'
+    output = getattr(sel.xpath(x_path), getter)()
+    if isinstance(output, str):
+        output = output.replace('\n', '')
+    else:
+        exclude = {'\n', ' '}
+        output = ', '.join([i.strip() for i in output if i not in exclude])
     return output
 
 class HseSpider(scrapy.Spider):
@@ -43,6 +49,7 @@ class HseSpider(scrapy.Spider):
 
     def parse_properties(self, response):
         """fetch properties id in page"""
+
         out = json.loads(response.text)['data']['results']['resultContentHtml']
         for line in out.splitlines():
             if m:=re.match(r".*attr1=\'(\d*)\'.* target=\"_blank\">$", line):
@@ -54,36 +61,29 @@ class HseSpider(scrapy.Spider):
                 )
 
     def parse_property_info(self, response):
-        """parse
-        """
+        """parse property page infos"""
+
         output = {}
-        from scrapy import Selector        
+        from scrapy import Selector
         sel = Selector(text=response.text)
 
         output['url'] = response.url
         xpath_parser.response = response
         output['title'] = xpath_parser("//h3/following-sibling::div//div[@class='header']/text()")
         output['desc'] = xpath_parser("//div[@id='desc_normal']/p/text()")
-        output['tag'] = xpath_parser("//div[contains(@class,'labels')]//text()")
+        output['tag'] = xpath_parser("//div[contains(@class,'labels')]//text()", getall=True)
 
         # table content
-        # there is no consistent html hierachy here, so fetch everythign in table
-        tr_xpath = "//table//tr[{}]/td[{}]//text()"
+        # there is no consistent html hierachy here, so fetch everything in table
+        # there could be nested table here, so the xpath selector need to be precise
+        desc_col_xpath = "//table//tr[{}]/td[{}]//text()"
+        value_col_xpath = "//table//tr[{}]/td[{}]/div//text()"
         i=1
-        while sel.xpath(tr_xpath.format(i, 1)):
-            row_desc = sel.xpath(tr_xpath.format(i, 1)).getall()
-            row_desc = ', '.join([i.strip() for i in row_desc if i != '\n'])
+        while sel.xpath(desc_col_xpath.format(i, 1)):
+            row_desc = xpath_parser(desc_col_xpath.format(i, 1))
             row_desc = row_desc.replace(' ', '_').lower()
-            row_val = sel.xpath(tr_xpath.format(i, 2)).getall()
-            row_val = ', '.join([i.strip() for i in row_val if i != '\n'])
-            # print(row_desc, row_val, sep='\n')
+            row_val = xpath_parser(value_col_xpath.format(i, 2), getall=True)
             output[row_desc] = row_val
             i+=1
 
-        # monthly rental
-        # rent_amt_xpath = "//td[contains(text(), 'Monthly Rental')]/following-sibling::td/div/text()"
-        # rent_amt = sel.xpath(rent_amt_xpath).re(r"Lease \$(.*)")[0]
-        # rent_amt = int(rent_amt.replace(',', ''))
-
-        # inspect_response(response, self)
         yield output
