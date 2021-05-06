@@ -7,6 +7,24 @@ from scrapy.shell import inspect_response
 from scrapy import Selector
 
 
+def xpath_parser(x_path):
+    """parse all items extracted by x_path, with comma as seperator
+    ignore newline character within a item as well as standalone newline item
+
+    Args:
+        html_response ([type]): [description]
+        x_path ([type]): [description]
+
+    Returns:
+        [type]: [description]
+    """    
+    if not xpath_parser.response:
+        raise ValueError('response not attached to function')
+
+    sel = Selector(text=xpath_parser.response.text)
+    elements = sel.xpath(x_path).getall()
+    output = ', '.join([e.strip() for e in elements if e != '\n'])
+    return output
 
 class HseSpider(scrapy.Spider):
     name = 'hse'
@@ -34,53 +52,38 @@ class HseSpider(scrapy.Spider):
                     url=f'https://www.28hse.com/en/rent/residential/property-{properties_id}',
                     callback=self.parse_property_info
                 )
-                break
 
     def parse_property_info(self, response):
         """parse
         """
-
+        output = {}
         from scrapy import Selector        
         sel = Selector(text=response.text)
 
-        # title
-        title_xpath = "//h3/following-sibling::div//div[@class='header']/text()"
-        titles = sel.xpath(title_xpath).getall()
-        title = ', '.join([i.strip() for i in titles])
-
-        # desc
-        desc_xpath = "//div[@id='desc_normal']/p/text()"
-        descs = sel.xpath(desc_xpath).getall()
-        desc = ', '.join([i.strip() for i in descs])
-
-        #tags
-        # "//div[@id='desc_normal']/following-sibling::div/*"
-        # tags_xpath = "//div[@id='desc_normal']/following-sibling::div/*"
-        tags_xpath = "//div[contains(@class,'labels')]//text()"
-        tags = sel.xpath(tags_xpath).getall()
-        tag = ', '.join([i.strip() for i in tags if i != '\n'])
+        output['url'] = response.url
+        xpath_parser.response = response
+        output['title'] = xpath_parser("//h3/following-sibling::div//div[@class='header']/text()")
+        output['desc'] = xpath_parser("//div[@id='desc_normal']/p/text()")
+        output['tag'] = xpath_parser("//div[contains(@class,'labels')]//text()")
 
         # table content
-        # instead of fetching each row one by one, run a for loop
-        # to fetch everything into a dict
+        # there is no consistent html hierachy here, so fetch everythign in table
         tr_xpath = "//table//tr[{}]/td[{}]//text()"
         i=1
-        tbl = {}
         while sel.xpath(tr_xpath.format(i, 1)):
-            row_desc  = sel.xpath(tr_xpath.format(i, 1)).getall()
+            row_desc = sel.xpath(tr_xpath.format(i, 1)).getall()
             row_desc = ', '.join([i.strip() for i in row_desc if i != '\n'])
+            row_desc = row_desc.replace(' ', '_').lower()
             row_val = sel.xpath(tr_xpath.format(i, 2)).getall()
             row_val = ', '.join([i.strip() for i in row_val if i != '\n'])
             # print(row_desc, row_val, sep='\n')
-            tbl[row_desc] = row_val
+            output[row_desc] = row_val
             i+=1
 
-
         # monthly rental
-        rent_amt_xpath = "//td[contains(text(), 'Monthly Rental')]/following-sibling::td/div/text()"
-        rent_amt = sel.xpath(rent_amt_xpath).re(r"Lease \$(.*)")[0]
-        rent_amt = int(rent_amt.replace(',', ''))
+        # rent_amt_xpath = "//td[contains(text(), 'Monthly Rental')]/following-sibling::td/div/text()"
+        # rent_amt = sel.xpath(rent_amt_xpath).re(r"Lease \$(.*)")[0]
+        # rent_amt = int(rent_amt.replace(',', ''))
 
-
-        # building area
-        inspect_response(response, self)
+        # inspect_response(response, self)
+        yield output
