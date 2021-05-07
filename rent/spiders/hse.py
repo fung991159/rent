@@ -1,6 +1,5 @@
 import json
 import re
-from pprint import pprint
 
 import scrapy
 from scrapy.shell import inspect_response
@@ -28,8 +27,9 @@ class HseSpider(scrapy.Spider):
         if there is no next page (regex match none), then the scraper would stop itself"""
         self.fetch_next_page = False # in the new page assume there is no item
         out = json.loads(response.text)['data']['results']['resultContentHtml']
+        url_regex = re.compile(r".*attr1=\'(\d*)\'.* target=\"_blank\">$")
         for line in out.splitlines():
-            if m:=re.match(r".*attr1=\'(\d*)\'.* target=\"_blank\">$", line):
+            if m:=url_regex.match(line):
                 fetch_next_page = True
                 properties_id = m.group(1)
                 yield scrapy.FormRequest(
