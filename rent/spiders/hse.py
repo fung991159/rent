@@ -7,31 +7,6 @@ from scrapy.shell import inspect_response
 from scrapy import Selector
 
 
-def xpath_parser(x_path, getall=False):
-    """parse all items extracted by x_path, with comma as seperator
-    ignore newline character within a item as well as standalone newline item
-
-    Args:
-        html_response ([type]): [description]
-        x_path ([type]): [description]
-        getall(str): scrapy getall() instead of the default get()
-
-    Returns:
-        [type]: [description]
-    """
-    if not xpath_parser.response:
-        raise ValueError('response not attached to function')
-
-    sel = Selector(text=xpath_parser.response.text)
-    getter = 'getall' if getall else 'get'
-    output = getattr(sel.xpath(x_path), getter)()
-    if isinstance(output, str):
-        output = output.replace('\n', '')
-    else:
-        exclude = {'\n', ' '}
-        output = ', '.join([i.strip() for i in output if i not in exclude])
-    return output
-
 class HseSpider(scrapy.Spider):
     name = 'hse'
     allowed_domains = ['28hse.com']
@@ -75,7 +50,33 @@ class HseSpider(scrapy.Spider):
 
     def parse_property_info(self, response):
         """parse property page infos"""
-        # inspect_response(response, self)
+
+        def xpath_parser(x_path, getall=False):
+            """parse all items extracted by x_path, with comma as seperator
+            ignore newline character within a item as well as standalone newline item
+
+            Args:
+                html_response ([type]): [description]
+                x_path ([type]): [description]
+                getall(str): scrapy getall() instead of the default get()
+
+            Returns:
+                [type]: [description]
+            """
+            try:
+                xpath_parser.response
+            except AttributeError:
+                raise ('response not attached to function')
+
+            sel = Selector(text=xpath_parser.response.text)
+            getter = 'getall' if getall else 'get'
+            output = getattr(sel.xpath(x_path), getter)()
+            if isinstance(output, str):
+                output = output.replace('\n', '')
+            else:
+                exclude = {'\n', ' '}
+                output = ', '.join([i.strip() for i in output if i not in exclude])
+            return output
 
         output = {}
         from scrapy import Selector
@@ -92,7 +93,8 @@ class HseSpider(scrapy.Spider):
         # there could be nested table here, so the xpath selector need to be precise
         desc_col_xpath = "//table//tr[{}]/td[{}]//text()"
         value_col_xpath = "//table//tr[{}]/td[{}]/div//text()"
-        i=1
+
+        i=2  # first row in the table is "qr_code", which I don't need
         while sel.xpath(desc_col_xpath.format(i, 1)):
             row_desc = xpath_parser(desc_col_xpath.format(i, 1))
             row_desc = row_desc.replace(' ', '_').lower()
@@ -101,3 +103,6 @@ class HseSpider(scrapy.Spider):
             i+=1
 
         yield output
+
+#TODO: class attr "form_data" should be parametized to have a handle of what to fetch
+
